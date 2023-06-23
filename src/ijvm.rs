@@ -58,14 +58,19 @@ impl Frame {
     }
 
     pub fn load_var(&self, var: u16) -> i32 {
-        self.var_values[var as usize]
+        // SAFETY: IJVM file shouldnt't read uninitialized variables
+        unsafe { *self.var_values.get_unchecked(var as usize) }
     }
 
     pub fn store_var(&mut self, var: u16, value: i32) {
         if self.var_values.len() <= var as usize {
             self.var_values.resize(var as usize + 1, 0);
         }
-        self.var_values[var as usize] = value;
+
+        unsafe {
+            // SAFETY: we extend the vector to the correct size
+            *self.var_values.get_unchecked_mut(var as usize) = value;
+        }
     }
 
     pub fn restore_pc(&self) -> u32 {
