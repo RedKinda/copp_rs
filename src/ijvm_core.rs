@@ -5,7 +5,7 @@ use crate::{
     instructions::{self, IJVMParser, MemoryBlock},
 };
 pub type Constant = i32;
-pub type InstructionRef = u32;
+pub type InstructionRef = usize;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstantKind {

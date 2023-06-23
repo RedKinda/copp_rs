@@ -413,7 +413,7 @@ impl MemoryBlock {
                 let mut frame = Frame::new(
                     runtime.stack_len() as u32,
                     n_vars as u32,
-                    runtime.program_counter() as u32,
+                    runtime.program_counter() as InstructionRef,
                 );
                 frame.store_var(0, 0);
 

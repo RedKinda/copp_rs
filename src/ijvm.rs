@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::ijvm_core::InstructionRef;
+
 pub struct IJVMBlock {
     pub origin: u32,
     pub pool_size: u32,
@@ -45,11 +47,11 @@ struct frame {
 pub struct Frame {
     starting_stack_length: u32,
     var_values: Vec<i32>,
-    restore_pc: u32,
+    restore_pc: InstructionRef,
 }
 
 impl Frame {
-    pub fn new(starting_stack_length: u32, var_count: u32, restore_pc: u32) -> Frame {
+    pub fn new(starting_stack_length: u32, var_count: u32, restore_pc: InstructionRef) -> Frame {
         Frame {
             starting_stack_length,
             var_values: Vec::with_capacity(var_count as usize),
@@ -88,7 +90,7 @@ impl Frame {
     }
 
     #[inline]
-    pub fn restore_pc(&self) -> u32 {
+    pub fn restore_pc(&self) -> InstructionRef {
         self.restore_pc
     }
 
