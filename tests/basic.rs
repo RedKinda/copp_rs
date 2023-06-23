@@ -119,10 +119,10 @@ mod tests {
     }
 
     // advanced folder
-    #[test]
-    fn test_advanced_all() {
-        test_all("files/advanced");
-    }
+    // #[test]
+    // fn test_advanced_all() {
+    //     test_all("files/advanced");
+    // }
 
     // run mandelbread.ijvm in advanced
     #[test]

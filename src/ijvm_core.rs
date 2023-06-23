@@ -121,11 +121,42 @@ impl Runtime {
         self.stack.len()
     }
 
+    pub fn stack_swap(&mut self) {
+        let len = self.stack.len();
+
+        // feature unsafe only
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            // unsafely swaps top two elements on the stack
+            // SAFETY: IJVM file has to be valid
+            let ptr = self.stack.as_mut_ptr();
+            std::ptr::swap(ptr.add(len - 1), ptr.add(len - 2));
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            let a = self.stack_pop();
+            let b = self.stack_pop();
+            self.stack_push(a);
+            self.stack_push(b);
+        }
+    }
+
     pub fn tos(&self) -> i32 {
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            *self.stack.get_unchecked(self.stack.len() - 1)
+        }
+        #[cfg(not(feature = "unsafe"))]
         *self.stack.last().expect("Stack underflow")
     }
 
     pub fn frame(&mut self) -> &mut ijvm::Frame {
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            let ind = self.frames.len() - 1;
+            self.frames.get_unchecked_mut(ind)
+        }
+        #[cfg(not(feature = "unsafe"))]
         self.frames.last_mut().expect("No frames")
     }
 
