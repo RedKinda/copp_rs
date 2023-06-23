@@ -107,12 +107,10 @@ impl Runtime {
             instruction = self.instructions[self.program_counter].clone();
         }
 
-        let start_pc = self.program_counter;
         instruction.execute(self);
-        if start_pc == self.program_counter {
-            self.program_counter += 1;
-        }
+        self.program_counter += 1;
 
+        // this check has to be present for tests, as they dont HALT correctly
         #[cfg(not(feature = "unsafe"))]
         if self.program_counter >= self.instructions.len() {
             self.is_finished = true;

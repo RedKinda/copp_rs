@@ -148,7 +148,7 @@ where
         }
 
         ind = ind.wrapping_add_signed(offset as isize);
-        self.mappings[ind]
+        self.mappings[ind] - 1
     }
 
     pub fn parse_iter(iterator: I, constants: Vec<ConstantKind>) -> Vec<MemoryBlock> {
@@ -415,7 +415,7 @@ impl MemoryBlock {
 
                 runtime.push_frame(frame);
 
-                runtime.set_pc(ind + 1);
+                runtime.set_pc(*ind);
             }
             MemoryBlock::IRETURN => {
                 /*
@@ -436,7 +436,7 @@ impl MemoryBlock {
 
                 let return_value = runtime.stack_pop();
                 let previous_frame = runtime.pop_frame();
-                runtime.set_pc(previous_frame.restore_pc() as usize + 1);
+                runtime.set_pc(previous_frame.restore_pc() as usize);
                 while runtime.stack_len() > previous_frame.starting_stack_length() as usize {
                     runtime.stack_pop();
                 }
