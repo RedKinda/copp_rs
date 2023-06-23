@@ -44,7 +44,7 @@ struct frame {
 
 pub struct Frame {
     starting_stack_length: u32,
-    var_values: HashMap<u16, i32>,
+    var_values: Vec<i32>,
     restore_pc: u32,
 }
 
@@ -52,17 +52,20 @@ impl Frame {
     pub fn new(starting_stack_length: u32, var_count: u32, restore_pc: u32) -> Frame {
         Frame {
             starting_stack_length,
-            var_values: HashMap::new(),
+            var_values: Vec::with_capacity(var_count as usize),
             restore_pc,
         }
     }
 
     pub fn load_var(&self, var: u16) -> i32 {
-        *self.var_values.get(&var).unwrap()
+        self.var_values[var as usize]
     }
 
     pub fn store_var(&mut self, var: u16, value: i32) {
-        self.var_values.insert(var, value);
+        if self.var_values.len() <= var as usize {
+            self.var_values.resize(var as usize + 1, 0);
+        }
+        self.var_values[var as usize] = value;
     }
 
     pub fn restore_pc(&self) -> u32 {
