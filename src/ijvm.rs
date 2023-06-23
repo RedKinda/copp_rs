@@ -57,11 +57,13 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn load_var(&self, var: u16) -> i32 {
         // SAFETY: IJVM file shouldnt't read uninitialized variables
         unsafe { *self.var_values.get_unchecked(var as usize) }
     }
 
+    #[inline]
     pub fn store_var(&mut self, var: u16, value: i32) {
         if self.var_values.len() <= var as usize {
             self.var_values.resize(var as usize + 1, 0);
@@ -73,10 +75,12 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn restore_pc(&self) -> u32 {
         self.restore_pc
     }
 
+    #[inline]
     pub fn starting_stack_length(&self) -> u32 {
         self.starting_stack_length
     }

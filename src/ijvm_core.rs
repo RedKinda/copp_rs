@@ -79,8 +79,20 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn step(&mut self) -> MemoryBlock {
-        let instruction = self.instructions[self.program_counter as usize].clone();
+    #[inline]
+    pub fn step(&mut self) {
+        let instruction;
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            instruction = self
+                .instructions
+                .get_unchecked(self.program_counter)
+                .clone();
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            instruction = self.instructions[self.program_counter].clone();
+        }
 
         let start_pc = self.program_counter;
         instruction.execute(self);
@@ -88,51 +100,55 @@ impl Runtime {
             self.program_counter += 1;
         }
 
-        if self.program_counter as usize == self.instructions.len() {
+        if self.program_counter >= self.instructions.len() {
             self.is_finished = true;
         }
-        instruction
     }
     pub fn steps(&mut self, count: usize) {
         for _ in 0..count {
             self.step();
         }
     }
+    #[inline]
     pub fn run(&mut self) {
         while !self.is_finished {
             self.step();
         }
     }
 
-    // mapped set
+    #[inline]
     pub fn set_pc(&mut self, pc: usize) {
         self.program_counter = pc;
     }
 
+    #[inline]
     pub fn stack_pop(&mut self) -> i32 {
         self.stack.pop().expect("Stack underflow")
     }
 
+    #[inline]
     pub fn stack_push(&mut self, value: i32) {
         self.stack.push(value);
     }
 
+    #[inline]
     pub fn stack_len(&self) -> usize {
         self.stack.len()
     }
 
+    #[inline]
     pub fn stack_swap(&mut self) {
-        let len = self.stack.len();
-
-        // feature unsafe only
-        #[cfg(feature = "unsafe")]
-        unsafe {
-            // unsafely swaps top two elements on the stack
-            // SAFETY: IJVM file has to be valid
-            let ptr = self.stack.as_mut_ptr();
-            std::ptr::swap(ptr.add(len - 1), ptr.add(len - 2));
-        }
-        #[cfg(not(feature = "unsafe"))]
+        // #[cfg(feature = "unsafe")]
+        // unsafe {
+        //     let len = self.stack.len();
+        //     // unsafely swaps top two elements on the stack
+        //     // SAFETY: IJVM file has to be valid
+        //     let a = *self.stack.get_unchecked(len - 1);
+        //     let b = *self.stack.get_unchecked(len - 2);
+        //     *self.stack.get_unchecked_mut(len - 1) = b;
+        //     *self.stack.get_unchecked_mut(len - 2) = a;
+        // }
+        // #[cfg(not(feature = "unsafe"))]
         {
             let a = self.stack_pop();
             let b = self.stack_pop();
@@ -141,6 +157,7 @@ impl Runtime {
         }
     }
 
+    #[inline]
     pub fn tos(&self) -> i32 {
         #[cfg(feature = "unsafe")]
         unsafe {
@@ -150,52 +167,64 @@ impl Runtime {
         *self.stack.last().expect("Stack underflow")
     }
 
+    #[inline]
     pub fn frame(&mut self) -> &mut ijvm::Frame {
-        #[cfg(feature = "unsafe")]
-        unsafe {
-            let ind = self.frames.len() - 1;
-            self.frames.get_unchecked_mut(ind)
-        }
-        #[cfg(not(feature = "unsafe"))]
+        // unsafe is actually slightly slower
+        // #[cfg(feature = "unsafe")]
+        // unsafe {
+        //     let ind = self.frames.len() - 1;
+        //     self.frames.get_unchecked_mut(ind)
+        // }
+        // #[cfg(not(feature = "unsafe"))]
         self.frames.last_mut().expect("No frames")
     }
 
+    #[inline]
     pub fn push_frame(&mut self, frame: ijvm::Frame) {
         self.frames.push(frame);
     }
 
+    #[inline]
     pub fn pop_frame(&mut self) -> ijvm::Frame {
         self.frames.pop().expect("No frames")
     }
 
+    #[inline]
     pub fn in_stream(&mut self) -> &mut std::io::Stdin {
         &mut self.in_stream
     }
 
+    #[inline]
     pub fn out_stream(&mut self) -> &mut std::io::Stderr {
         &mut self.out_stream
     }
 
+    #[inline]
     pub fn halt(&mut self) {
         self.is_finished = true;
     }
 
+    #[inline]
     pub fn is_finished(&self) -> bool {
         self.is_finished
     }
 
+    #[inline]
     pub fn constants(&self) -> &Vec<Constant> {
         &self.constants
     }
 
+    #[inline]
     pub fn program_counter(&self) -> usize {
         self.program_counter
     }
 
+    #[inline]
     pub fn visit_stack(&self) -> &Vec<i32> {
         &self.stack
     }
 
+    #[inline]
     pub fn visit_instructions(&self) -> &Vec<MemoryBlock> {
         &self.instructions
     }

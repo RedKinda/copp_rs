@@ -286,6 +286,7 @@ where
 }
 
 impl MemoryBlock {
+    #[inline]
     pub fn execute(&self, runtime: &mut Runtime) {
         match &self {
             MemoryBlock::IADD => {
@@ -324,12 +325,7 @@ impl MemoryBlock {
                     runtime.stack_push(0);
                 }
             }
-            MemoryBlock::SWAP => {
-                let top = runtime.stack_pop();
-                let second_top = runtime.stack_pop();
-                runtime.stack_push(top);
-                runtime.stack_push(second_top);
-            }
+            MemoryBlock::SWAP => runtime.stack_swap(),
             MemoryBlock::POP => {
                 runtime.stack_pop();
             }
