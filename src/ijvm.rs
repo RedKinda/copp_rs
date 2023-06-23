@@ -59,8 +59,14 @@ impl Frame {
 
     #[inline]
     pub fn load_var(&self, var: u16) -> i32 {
+        #[cfg(feature = "unsafe")]
         // SAFETY: IJVM file shouldnt't read uninitialized variables
-        unsafe { *self.var_values.get_unchecked(var as usize) }
+        unsafe {
+            *self.var_values.get_unchecked(var as usize)
+        }
+
+        #[cfg(not(feature = "unsafe"))]
+        self.var_values[var as usize]
     }
 
     #[inline]
@@ -69,9 +75,15 @@ impl Frame {
             self.var_values.resize(var as usize + 1, 0);
         }
 
+        #[cfg(feature = "unsafe")]
         unsafe {
             // SAFETY: we extend the vector to the correct size
             *self.var_values.get_unchecked_mut(var as usize) = value;
+        }
+
+        #[cfg(not(feature = "unsafe"))]
+        {
+            self.var_values[var as usize] = value;
         }
     }
 

@@ -15,6 +15,7 @@ pub enum ConstantKind {
 }
 
 impl ConstantKind {
+    #[inline]
     pub fn value(&self) -> Constant {
         match self {
             ConstantKind::MethodRef(x) => *x,
@@ -23,6 +24,7 @@ impl ConstantKind {
             _ => panic!("None!"),
         }
     }
+    #[inline]
     pub fn unchecked_value(&self) -> Constant {
         match self {
             ConstantKind::MethodRef(x) => *x,
@@ -31,20 +33,29 @@ impl ConstantKind {
             ConstantKind::None(x) => *x,
         }
     }
+    #[inline]
     pub fn unwrap_method_ref(&self) -> Constant {
         match self {
             ConstantKind::MethodRef(x) => *x,
             ConstantKind::Either(x) => *x,
+            #[cfg(feature = "unsafe")]
+            _ => unsafe { std::hint::unreachable_unchecked() },
+            #[cfg(not(feature = "unsafe"))]
             _ => panic!("Not a method ref"),
         }
     }
+    #[inline]
     pub fn unwrap_stack_value(&self) -> Constant {
         match self {
             ConstantKind::StackValue(x) => *x,
             ConstantKind::Either(x) => *x,
-            _ => panic!("Not a stack value"),
+            #[cfg(feature = "unsafe")]
+            _ => unsafe { std::hint::unreachable_unchecked() },
+            #[cfg(not(feature = "unsafe"))]
+            _ => panic!("Not a method ref"),
         }
     }
+    #[inline]
     pub fn as_method(self) -> ConstantKind {
         match self {
             ConstantKind::StackValue(x) => ConstantKind::Either(x),
@@ -52,6 +63,7 @@ impl ConstantKind {
             _ => self,
         }
     }
+    #[inline]
     pub fn as_stack(self) -> ConstantKind {
         match self {
             ConstantKind::MethodRef(x) => ConstantKind::Either(x),
@@ -59,6 +71,7 @@ impl ConstantKind {
             _ => self,
         }
     }
+    #[inline]
     pub fn is_none(&self) -> bool {
         match self {
             ConstantKind::None(_) => true,
@@ -100,6 +113,7 @@ impl Runtime {
             self.program_counter += 1;
         }
 
+        #[cfg(not(feature = "unsafe"))]
         if self.program_counter >= self.instructions.len() {
             self.is_finished = true;
         }
