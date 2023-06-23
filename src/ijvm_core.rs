@@ -5,6 +5,7 @@ use crate::{
     instructions::{self, IJVMParser, MemoryBlock},
 };
 pub type Constant = i32;
+pub type InstructionRef = u32;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConstantKind {
@@ -129,8 +130,8 @@ impl Runtime {
     }
 
     #[inline]
-    pub fn set_pc(&mut self, pc: usize) {
-        self.program_counter = pc;
+    pub fn set_pc(&mut self, pc: InstructionRef) {
+        self.program_counter = pc as usize;
     }
 
     #[inline]

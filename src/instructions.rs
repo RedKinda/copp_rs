@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     ijvm::Frame,
-    ijvm_core::{Constant, ConstantKind, Runtime},
+    ijvm_core::{Constant, ConstantKind, InstructionRef, Runtime},
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -30,11 +30,11 @@ pub enum MemoryBlock {
     WIDE(WideMemoryBlock),
 
     METHODHEADER { n_args: u16, n_vars: u16 },
-    RESOLVED_INVOKEVIRTUAL(usize),
-    RESOLVED_GOTO(usize),
-    RESOLVED_IFEQ(usize),
-    RESOLVED_IFLT(usize),
-    RESOLVED_IF_ICMPEQ(usize),
+    RESOLVED_INVOKEVIRTUAL(InstructionRef),
+    RESOLVED_GOTO(InstructionRef),
+    RESOLVED_IFEQ(InstructionRef),
+    RESOLVED_IFLT(InstructionRef),
+    RESOLVED_IF_ICMPEQ(InstructionRef),
     RESOLVED_LDC_W(i32),
     Delayed(ResolveLater),
     // WIDE(),
@@ -140,15 +140,15 @@ impl<I> IJVMParser<I>
 where
     I: Iterator<Item = u8>,
 {
-    fn get_target(&self, current: usize, offset: i16) -> usize {
+    fn get_target(&self, current: InstructionRef, offset: i16) -> InstructionRef {
         // find value of current within mappings
         let mut ind = 0;
-        while self.mappings[ind] != current {
+        while self.mappings[ind] != current as usize {
             ind += 1;
         }
 
         ind = ind.wrapping_add_signed(offset as isize);
-        self.mappings[ind] - 1
+        (self.mappings[ind] - 1) as InstructionRef
     }
 
     pub fn parse_iter(iterator: I, constants: Vec<ConstantKind>) -> Vec<MemoryBlock> {
@@ -177,22 +177,22 @@ where
             if let MemoryBlock::Delayed(instruction) = &parser.blocks[i] {
                 parser.blocks[i] = match instruction {
                     ResolveLater::GOTO(offset) => {
-                        MemoryBlock::RESOLVED_GOTO(parser.get_target(i, *offset))
+                        MemoryBlock::RESOLVED_GOTO(parser.get_target(i as InstructionRef, *offset))
                     }
                     ResolveLater::INVOKEVIRTUAL(offset) => {
                         let constant_val = parser.constants[*offset as usize].unwrap_method_ref();
                         let mapped = parser.mappings[constant_val as usize];
-                        MemoryBlock::RESOLVED_INVOKEVIRTUAL(mapped)
+                        MemoryBlock::RESOLVED_INVOKEVIRTUAL(mapped as InstructionRef)
                     }
                     ResolveLater::IFEQ(offset) => {
-                        MemoryBlock::RESOLVED_IFEQ(parser.get_target(i, *offset))
+                        MemoryBlock::RESOLVED_IFEQ(parser.get_target(i as InstructionRef, *offset))
                     }
                     ResolveLater::IFLT(offset) => {
-                        MemoryBlock::RESOLVED_IFLT(parser.get_target(i, *offset))
+                        MemoryBlock::RESOLVED_IFLT(parser.get_target(i as InstructionRef, *offset))
                     }
-                    ResolveLater::IF_ICMPEQ(offset) => {
-                        MemoryBlock::RESOLVED_IF_ICMPEQ(parser.get_target(i, *offset))
-                    }
+                    ResolveLater::IF_ICMPEQ(offset) => MemoryBlock::RESOLVED_IF_ICMPEQ(
+                        parser.get_target(i as InstructionRef, *offset),
+                    ),
                 };
                 // dbg!(&parser.blocks[i]);
             }
@@ -391,7 +391,15 @@ impl MemoryBlock {
                 }
             },
             MemoryBlock::RESOLVED_INVOKEVIRTUAL(ind) => {
-                let instruction = &runtime.visit_instructions()[*ind];
+                let instruction;
+                #[cfg(feature = "unsafe")]
+                unsafe {
+                    instruction = runtime.visit_instructions().get_unchecked(*ind as usize)
+                }
+                #[cfg(not(feature = "unsafe"))]
+                {
+                    instruction = runtime.visit_instructions()[*ind as usize];
+                }
 
                 // this should be a method ref
                 let (n_args, n_vars) = match *instruction {
@@ -436,7 +444,7 @@ impl MemoryBlock {
 
                 let return_value = runtime.stack_pop();
                 let previous_frame = runtime.pop_frame();
-                runtime.set_pc(previous_frame.restore_pc() as usize);
+                runtime.set_pc(previous_frame.restore_pc());
                 while runtime.stack_len() > previous_frame.starting_stack_length() as usize {
                     runtime.stack_pop();
                 }
