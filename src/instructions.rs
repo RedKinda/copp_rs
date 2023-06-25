@@ -1,11 +1,9 @@
-use std::{
-    io::{Read, Write},
-    iter::Peekable,
-};
+use std::{borrow::BorrowMut, cell::RefCell, io::Read, iter::Peekable};
 
 use crate::{
     ijvm::Frame,
-    ijvm_core::{Constant, ConstantKind, InstructionRef, Runtime},
+    ijvm_core::{ConstantKind, InstructionRef, Runtime},
+    inlining::Inliner,
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -18,10 +16,10 @@ pub enum MemoryBlock {
     IAND,
     IINC(u8, u8),
     ILOAD(u8),
+    ISTORE(u8),
     IN,
     IOR,
     IRETURN,
-    ISTORE(u8),
     ISUB,
     NOP,
     OUT,
@@ -36,7 +34,11 @@ pub enum MemoryBlock {
     RESOLVED_IFLT(InstructionRef),
     RESOLVED_IF_ICMPEQ(InstructionRef),
     RESOLVED_LDC_W(i32),
-    Delayed(ResolveLater),
+
+    InlinedInvokeVirtual(u16, u16),
+    InlinedIreturn(u16),
+
+    Delayed(ResolveLater, Option<InstructionRef>),
     // WIDE(),
     // NEWARRAY(),
     // IALOAD(),
@@ -108,7 +110,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self._data.next();
-        if let Some(next) = next {
+        if let Some(_next) = next {
             self.bytes_read += 1;
             self.total_bytes_read += 1;
         }
@@ -126,11 +128,34 @@ pub enum ResolveLater {
     IF_ICMPEQ(i16),
 }
 
+thread_local! {
+    pub static REFID: RefCell<InstructionRef> = RefCell::new(0);
+}
+#[derive(Clone, Debug)]
+pub struct ReferredMemoryBlock {
+    pub block: MemoryBlock,
+    pub reference: InstructionRef,
+}
+impl ReferredMemoryBlock {
+    pub fn new(block: MemoryBlock) -> ReferredMemoryBlock {
+        let mut resp: ReferredMemoryBlock = ReferredMemoryBlock {
+            block,
+            reference: 0,
+        };
+        REFID.with(|id: &RefCell<usize>| {
+            let mut id = id.borrow_mut();
+            resp.reference = *id;
+            *id = id.wrapping_add(1);
+        });
+        resp
+    }
+}
+
 pub struct IJVMParser<I>
 where
     I: Iterator<Item = u8>,
 {
-    blocks: Vec<MemoryBlock>,
+    blocks: Vec<ReferredMemoryBlock>,
     mappings: Vec<usize>,
     data: IJVMIter<I>,
     constants: Vec<ConstantKind>,
@@ -151,6 +176,15 @@ where
         (self.mappings[ind] - 1) as InstructionRef
     }
 
+    fn find_reference(&self, reference: InstructionRef) -> Option<InstructionRef> {
+        for i in 0..self.blocks.len() {
+            if self.blocks[i].reference == reference {
+                return Some(i as InstructionRef);
+            }
+        }
+        None
+    }
+
     pub fn parse_iter(iterator: I, constants: Vec<ConstantKind>) -> Vec<MemoryBlock> {
         let mut parser = IJVMParser {
             blocks: Vec::new(),
@@ -165,40 +199,99 @@ where
         while !parser.data.is_end() {
             let block = parser.parse_memory_block();
 
-            parser.blocks.push(block);
+            parser.blocks.push(ReferredMemoryBlock::new(block));
 
             for _ in 0..parser.data.fetch_bytes_read() {
                 parser.mappings.push(parser.blocks.len() - 1);
             }
         }
 
-        // resolve delayed instructions
-        for i in 0..parser.blocks.len() {
-            if let MemoryBlock::Delayed(instruction) = &parser.blocks[i] {
-                parser.blocks[i] = match instruction {
-                    ResolveLater::GOTO(offset) => {
-                        MemoryBlock::RESOLVED_GOTO(parser.get_target(i as InstructionRef, *offset))
-                    }
-                    ResolveLater::INVOKEVIRTUAL(offset) => {
-                        let constant_val = parser.constants[*offset as usize].unwrap_method_ref();
-                        let mapped = parser.mappings[constant_val as usize];
-                        MemoryBlock::RESOLVED_INVOKEVIRTUAL(mapped as InstructionRef)
-                    }
-                    ResolveLater::IFEQ(offset) => {
-                        MemoryBlock::RESOLVED_IFEQ(parser.get_target(i as InstructionRef, *offset))
-                    }
-                    ResolveLater::IFLT(offset) => {
-                        MemoryBlock::RESOLVED_IFLT(parser.get_target(i as InstructionRef, *offset))
-                    }
-                    ResolveLater::IF_ICMPEQ(offset) => MemoryBlock::RESOLVED_IF_ICMPEQ(
-                        parser.get_target(i as InstructionRef, *offset),
-                    ),
-                };
-                // dbg!(&parser.blocks[i]);
-            }
-        }
+        // assign references to delayed instructions
+        parser.blocks = parser
+            .blocks
+            .iter()
+            .enumerate()
+            .map(|(i, block)| {
+                if let MemoryBlock::Delayed(instruction, None) = &block.block {
+                    let offset = match instruction {
+                        ResolveLater::GOTO(offset) => {
+                            parser.get_target(i as InstructionRef, *offset)
+                        }
+                        ResolveLater::INVOKEVIRTUAL(const_ind) => {
+                            let constant_val =
+                                parser.constants[*const_ind as usize].unwrap_method_ref();
+                            let mapped = parser.mappings[constant_val as usize];
+                            mapped
+                        }
+                        ResolveLater::IFEQ(offset) => {
+                            parser.get_target(i as InstructionRef, *offset)
+                        }
+                        ResolveLater::IFLT(offset) => {
+                            parser.get_target(i as InstructionRef, *offset)
+                        }
+                        ResolveLater::IF_ICMPEQ(offset) => {
+                            parser.get_target(i as InstructionRef, *offset)
+                        }
+                    };
 
-        parser.blocks
+                    ReferredMemoryBlock {
+                        block: MemoryBlock::Delayed(
+                            instruction.clone(),
+                            Some(parser.blocks[offset as usize].reference),
+                        ),
+                        reference: block.reference,
+                    }
+
+                    // dbg!(&parser.blocks[i]);
+                } else {
+                    block.clone()
+                }
+            })
+            .collect();
+
+        // here, we can do optimizations, because references are saved and resolved later
+        parser.optimize();
+
+        parser.blocks = parser
+            .blocks
+            .iter()
+            .enumerate()
+            .map(|(i, block)| {
+                if let MemoryBlock::Delayed(instruction, Some(referencing)) = &block.block {
+                    let new_block = match instruction {
+                        ResolveLater::GOTO(offset) => {
+                            MemoryBlock::RESOLVED_GOTO(parser.find_reference(*referencing).unwrap())
+                        }
+                        ResolveLater::INVOKEVIRTUAL(offset) => MemoryBlock::RESOLVED_INVOKEVIRTUAL(
+                            parser.find_reference(*referencing).unwrap(),
+                        ),
+                        ResolveLater::IFEQ(offset) => {
+                            MemoryBlock::RESOLVED_IFEQ(parser.find_reference(*referencing).unwrap())
+                        }
+                        ResolveLater::IFLT(offset) => {
+                            MemoryBlock::RESOLVED_IFLT(parser.find_reference(*referencing).unwrap())
+                        }
+                        ResolveLater::IF_ICMPEQ(offset) => MemoryBlock::RESOLVED_IF_ICMPEQ(
+                            parser.find_reference(*referencing).unwrap(),
+                        ),
+                    };
+                    ReferredMemoryBlock {
+                        block: new_block,
+                        reference: block.reference,
+                    }
+                } else {
+                    block.clone()
+                }
+            })
+            .collect();
+
+        parser.blocks.into_iter().map(|x| x.block).collect()
+    }
+
+    fn optimize(&mut self) {
+        // for example, we can do simple inlining of method refs, if there is no branching code between header and ireturn
+        let mut inliner = Inliner::new(&mut self.blocks);
+        inliner.optimize();
     }
 
     fn parse_wide(&mut self) -> WideMemoryBlock {
@@ -251,11 +344,11 @@ where
             0xC4 => MemoryBlock::WIDE(self.parse_wide()),
 
             // resolve later
-            0x99 => MemoryBlock::Delayed(ResolveLater::IFEQ(self.data.get_short())),
-            0x9B => MemoryBlock::Delayed(ResolveLater::IFLT(self.data.get_short())),
-            0x9F => MemoryBlock::Delayed(ResolveLater::IF_ICMPEQ(self.data.get_short())),
-            0xA7 => MemoryBlock::Delayed(ResolveLater::GOTO(self.data.get_short())),
-            0xB6 => MemoryBlock::Delayed(ResolveLater::INVOKEVIRTUAL(self.data.get_ushort())),
+            0x99 => MemoryBlock::Delayed(ResolveLater::IFEQ(self.data.get_short()), None),
+            0x9B => MemoryBlock::Delayed(ResolveLater::IFLT(self.data.get_short()), None),
+            0x9F => MemoryBlock::Delayed(ResolveLater::IF_ICMPEQ(self.data.get_short()), None),
+            0xA7 => MemoryBlock::Delayed(ResolveLater::GOTO(self.data.get_short()), None),
+            0xB6 => MemoryBlock::Delayed(ResolveLater::INVOKEVIRTUAL(self.data.get_ushort()), None),
             // 0xD1 => MemoryBlock::NEWARRAY),
             // 0xD2 => MemoryBlock::IALOAD),
             // 0xD3 => MemoryBlock::IASTORE),
@@ -313,7 +406,7 @@ impl MemoryBlock {
                 runtime.stack_push(*val as i32);
             }
             MemoryBlock::OUT => {
-                let popped = runtime.stack_pop();
+                let _popped = runtime.stack_pop();
                 // runtime.out_stream().write_all(&[popped as u8]).unwrap();
             }
             MemoryBlock::IN => {
@@ -398,7 +491,7 @@ impl MemoryBlock {
                 }
                 #[cfg(not(feature = "unsafe"))]
                 {
-                    instruction = runtime.visit_instructions()[*ind as usize];
+                    instruction = &runtime.visit_instructions()[*ind as usize];
                 }
 
                 // this should be a method ref
@@ -450,6 +543,24 @@ impl MemoryBlock {
                 }
                 runtime.stack_push(return_value);
             }
+            MemoryBlock::InlinedIreturn(stack_diff) => {
+                let return_value = runtime.stack_pop();
+                for _ in 0..*stack_diff {
+                    runtime.stack_pop();
+                }
+                runtime.stack_push(return_value);
+            }
+
+            MemoryBlock::InlinedInvokeVirtual(n_args, n_vars) => {
+                let mut args = vec![];
+                for _ in 0..*n_args {
+                    args.push(runtime.stack_pop());
+                }
+                let frame = runtime.frame();
+                for i in 0..*n_vars {
+                    frame.store_var(*n_vars - i - 1, args[i as usize]);
+                }
+            }
 
             MemoryBlock::ERR => {
                 panic!("Encountered ERR instruction");
@@ -458,6 +569,10 @@ impl MemoryBlock {
 
             i => todo!("{:?}", i),
         }
+    }
+
+    pub fn into(self) -> ReferredMemoryBlock {
+        ReferredMemoryBlock::new(self)
     }
 }
 

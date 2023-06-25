@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests_5 {
-    use copp_rs::{ijvm_core::init_ijvm, *};
+    use copp_rs::ijvm_core::init_ijvm;
 
     #[test]
     fn test_invokenoargs() {
@@ -12,6 +12,13 @@ mod tests_5 {
         assert_eq!(runtime.tos(), 0x43);
         runtime.steps(2);
         assert_eq!(runtime.tos(), 0x43);
+    }
+
+    #[test]
+    fn test_invokeargs() {
+        let mut runtime = init_ijvm("files/task5/TestInvokeArgs.ijvm");
+
+        runtime.run();
     }
 
     #[test]

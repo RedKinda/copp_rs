@@ -129,5 +129,6 @@ mod tests {
     fn test_mandelbread() {
         let mut runtime = init_ijvm("files/advanced/mandelbread.ijvm");
         runtime.run();
+        runtime.reset();
     }
 }

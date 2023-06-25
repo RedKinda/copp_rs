@@ -2,7 +2,7 @@ use std::io::Read;
 
 use crate::{
     ijvm,
-    instructions::{self, IJVMParser, MemoryBlock},
+    instructions::{IJVMParser, MemoryBlock},
 };
 pub type Constant = i32;
 pub type InstructionRef = usize;
@@ -244,6 +244,7 @@ impl Runtime {
 
     pub fn reset(&mut self) {
         self.program_counter = 0;
+        // print stack and frame length
         self.stack.clear();
         self.frames.clear();
         self.frames.push(ijvm::Frame::new(0, 0, 0));
@@ -308,7 +309,7 @@ pub fn init_ijvm(binary_file: &str) -> Runtime {
         }
     }
 
-    let mut instructions = IJVMParser::parse_iter(text.contents.iter().cloned(), constants_kinded);
+    let instructions = IJVMParser::parse_iter(text.contents.iter().cloned(), constants_kinded);
 
     println!(
         "Loaded ijvm file {}, constants pool size: {}, text pool size: {}",
@@ -316,6 +317,7 @@ pub fn init_ijvm(binary_file: &str) -> Runtime {
         constants.len(),
         text.pool_size
     );
+    dbg!(&instructions);
     let current_frame = ijvm::Frame::new(0, 0, 0);
     let program_counter = 0;
     let is_finished = false;

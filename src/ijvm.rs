@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::ijvm_core::InstructionRef;
 
 pub struct IJVMBlock {
@@ -44,9 +42,11 @@ struct frame {
 } typedef frame;
  */
 
+type VarType = i32;
+
 pub struct Frame {
     starting_stack_length: u32,
-    var_values: Vec<i32>,
+    var_values: Vec<VarType>,
     restore_pc: InstructionRef,
 }
 
@@ -60,7 +60,7 @@ impl Frame {
     }
 
     #[inline]
-    pub fn load_var(&self, var: u16) -> i32 {
+    pub fn load_var(&self, var: u16) -> VarType {
         #[cfg(feature = "unsafe")]
         // SAFETY: IJVM file shouldnt't read uninitialized variables
         unsafe {
@@ -72,7 +72,7 @@ impl Frame {
     }
 
     #[inline]
-    pub fn store_var(&mut self, var: u16, value: i32) {
+    pub fn store_var(&mut self, var: u16, value: VarType) {
         if self.var_values.len() <= var as usize {
             self.var_values.resize(var as usize + 1, 0);
         }
