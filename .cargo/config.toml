@@ -1,0 +1,5 @@
+# .cargo/config.toml
+rustflags = [
+  # ..
+  "-C", "inline-threshold=0", # +
+]

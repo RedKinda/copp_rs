@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::ijvm_core::InstructionRef;
+use crate::{ijvm_core::InstructionRef, tiny::TinyVars};
 
 pub struct IJVMBlock {
     pub origin: u32,
@@ -46,7 +44,7 @@ struct frame {
 
 pub struct Frame {
     starting_stack_length: u32,
-    var_values: Vec<i32>,
+    vars: TinyVars,
     restore_pc: InstructionRef,
 }
 
@@ -54,39 +52,19 @@ impl Frame {
     pub fn new(starting_stack_length: u32, var_count: u32, restore_pc: InstructionRef) -> Frame {
         Frame {
             starting_stack_length,
-            var_values: Vec::with_capacity(var_count as usize),
+            vars: TinyVars::new(var_count),
             restore_pc,
         }
     }
 
     #[inline]
     pub fn load_var(&self, var: u16) -> i32 {
-        #[cfg(feature = "unsafe")]
-        // SAFETY: IJVM file shouldnt't read uninitialized variables
-        unsafe {
-            *self.var_values.get_unchecked(var as usize)
-        }
-
-        #[cfg(not(feature = "unsafe"))]
-        self.var_values[var as usize]
+        self.vars.load_var(var)
     }
 
     #[inline]
     pub fn store_var(&mut self, var: u16, value: i32) {
-        if self.var_values.len() <= var as usize {
-            self.var_values.resize(var as usize + 1, 0);
-        }
-
-        #[cfg(feature = "unsafe")]
-        unsafe {
-            // SAFETY: we extend the vector to the correct size
-            *self.var_values.get_unchecked_mut(var as usize) = value;
-        }
-
-        #[cfg(not(feature = "unsafe"))]
-        {
-            self.var_values[var as usize] = value;
-        }
+        self.vars.store_var(var, value);
     }
 
     #[inline]
@@ -97,5 +75,17 @@ impl Frame {
     #[inline]
     pub fn starting_stack_length(&self) -> u32 {
         self.starting_stack_length
+    }
+
+    #[inline]
+    pub fn reset(
+        &mut self,
+        new_stack_length: u32,
+        new_var_count: u32,
+        new_restore_pc: InstructionRef,
+    ) {
+        self.vars.reset();
+        self.starting_stack_length = new_stack_length;
+        self.restore_pc = new_restore_pc;
     }
 }

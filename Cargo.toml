@@ -9,9 +9,10 @@ edition = "2021"
 name = "mandelbread"
 harness = false
 
-
-
-[dependencies]
+[profile.release]
+# or "z"
+opt-level = 3
+debug = true
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -19,3 +20,4 @@ criterion = "0.5.1"
 [features]
 default = ["unsafe"]
 unsafe = []
+metrics = []

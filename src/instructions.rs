@@ -1,14 +1,10 @@
-use std::{
-    io::{Read, Write},
-    iter::Peekable,
-};
 
-use crate::{
-    ijvm::Frame,
-    ijvm_core::{Constant, ConstantKind, InstructionRef, Runtime},
-};
+#[allow(unused_imports)]
+use std::{io::{Read, Write}, iter::Peekable};
+use crate::ijvm_core::{ConstantKind, InstructionRef, RuntimeInner};
 
 #[derive(Clone, PartialEq, Debug)]
+#[allow(non_camel_case_types)]
 pub enum MemoryBlock {
     BIPUSH(i8),
     DUP,
@@ -108,7 +104,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self._data.next();
-        if let Some(next) = next {
+        if next.is_some() {
             self.bytes_read += 1;
             self.total_bytes_read += 1;
         }
@@ -117,6 +113,7 @@ where
 }
 
 #[derive(Clone, PartialEq, Debug)]
+#[allow(non_camel_case_types)]
 pub enum ResolveLater {
     GOTO(i16),
     INVOKEVIRTUAL(u16),
@@ -143,7 +140,7 @@ where
     fn get_target(&self, current: InstructionRef, offset: i16) -> InstructionRef {
         // find value of current within mappings
         let mut ind = 0;
-        while self.mappings[ind] != current as usize {
+        while self.mappings[ind] != current {
             ind += 1;
         }
 
@@ -287,7 +284,7 @@ where
 
 impl MemoryBlock {
     #[inline]
-    pub fn execute(&self, runtime: &mut Runtime) {
+    pub fn execute(&self, runtime: &mut RuntimeInner) {
         match &self {
             MemoryBlock::IADD => {
                 let top = runtime.stack_pop();
@@ -313,7 +310,7 @@ impl MemoryBlock {
                 runtime.stack_push(*val as i32);
             }
             MemoryBlock::OUT => {
-                let popped = runtime.stack_pop();
+                let _popped = runtime.stack_pop();
                 // runtime.out_stream().write_all(&[popped as u8]).unwrap();
             }
             MemoryBlock::IN => {
@@ -376,12 +373,12 @@ impl MemoryBlock {
             }
             MemoryBlock::WIDE(block) => match block {
                 WideMemoryBlock::ILOAD(ident) => {
-                    let value = runtime.frame().load_var(*ident as u16);
+                    let value = runtime.frame().load_var(*ident);
                     runtime.stack_push(value);
                 }
                 WideMemoryBlock::ISTORE(ident) => {
                     let value = runtime.stack_pop();
-                    runtime.frame().store_var(*ident as u16, value);
+                    runtime.frame().store_var(*ident, value);
                 }
                 WideMemoryBlock::IIINC(ident, to_add) => {
                     let current_value = runtime.frame().load_var(*ident as u16);
@@ -394,11 +391,11 @@ impl MemoryBlock {
                 let instruction;
                 #[cfg(feature = "unsafe")]
                 unsafe {
-                    instruction = runtime.visit_instructions().get_unchecked(*ind as usize)
+                    instruction = runtime.visit_instructions().get_unchecked(*ind)
                 }
                 #[cfg(not(feature = "unsafe"))]
                 {
-                    instruction = runtime.visit_instructions()[*ind as usize];
+                    instruction = runtime.visit_instructions().get(*ind as usize).unwrap();
                 }
 
                 // this should be a method ref
@@ -410,18 +407,7 @@ impl MemoryBlock {
                     ),
                 };
 
-                let mut frame = Frame::new(
-                    runtime.stack_len() as u32,
-                    n_vars as u32,
-                    runtime.program_counter() as InstructionRef,
-                );
-                frame.store_var(0, 0);
-
-                for i in 0..n_args {
-                    frame.store_var(n_args - i - 1, runtime.stack_pop());
-                }
-
-                runtime.push_frame(frame);
+                runtime.push_frame(n_vars, n_args);
 
                 runtime.set_pc(*ind);
             }
@@ -443,11 +429,7 @@ impl MemoryBlock {
                 */
 
                 let return_value = runtime.stack_pop();
-                let previous_frame = runtime.pop_frame();
-                runtime.set_pc(previous_frame.restore_pc());
-                while runtime.stack_len() > previous_frame.starting_stack_length() as usize {
-                    runtime.stack_pop();
-                }
+                runtime.pop_frame();
                 runtime.stack_push(return_value);
             }
 
@@ -483,3 +465,37 @@ impl MemoryBlock {
        }
 
 */
+
+#[cfg(feature = "metrics")]
+impl MemoryBlock {
+    pub fn metrics_str(&self) -> &'static str {
+        match self {
+            MemoryBlock::BIPUSH(_) => "BIPUSH",
+            MemoryBlock::DUP => "DUP",
+            MemoryBlock::ERR => "ERR",
+            MemoryBlock::HALT => "HALT",
+            MemoryBlock::IADD => "IADD",
+            MemoryBlock::IAND => "IAND",
+            MemoryBlock::IINC(_, _) => "IINC",
+            MemoryBlock::ILOAD(_) => "ILOAD",
+            MemoryBlock::IN => "IN",
+            MemoryBlock::IOR => "IOR",
+            MemoryBlock::IRETURN => "IRETURN",
+            MemoryBlock::ISTORE(_) => "ISTORE",
+            MemoryBlock::ISUB => "ISUB",
+            MemoryBlock::NOP => "NOP",
+            MemoryBlock::OUT => "OUT",
+            MemoryBlock::POP => "POP",
+            MemoryBlock::SWAP => "SWAP",
+            MemoryBlock::WIDE(_) => "WIDE",
+            MemoryBlock::METHODHEADER { .. } => "METHODHEADER",
+            MemoryBlock::RESOLVED_INVOKEVIRTUAL(_) => "RESOLVED_INVOKEVIRTUAL",
+            MemoryBlock::RESOLVED_GOTO(_) => "RESOLVED_GOTO",
+            MemoryBlock::RESOLVED_IFEQ(_) => "RESOLVED_IFEQ",
+            MemoryBlock::RESOLVED_IFLT(_) => "RESOLVED_IFLT",
+            MemoryBlock::RESOLVED_IF_ICMPEQ(_) => "RESOLVED_IF_ICMPEQ",
+            MemoryBlock::RESOLVED_LDC_W(_) => "RESOLVED_LDC_W",
+            MemoryBlock::Delayed(_) => "Delayed",
+        }
+    }
+}

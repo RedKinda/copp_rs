@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests_5 {
-    use copp_rs::{ijvm_core::init_ijvm, *};
+    use copp_rs::ijvm_core::init_ijvm;
 
     #[test]
     fn test_invokenoargs() {

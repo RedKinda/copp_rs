@@ -12,7 +12,8 @@
                 "args": [
                     "build",
                     "--bin=copp_rs",
-                    "--package=copp_rs"
+                    "--package=copp_rs",
+                    // "--release"
                 ],
                 "filter": {
                     "name": "copp_rs",
@@ -25,18 +26,19 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug integration test 'basic'",
+            "name": "Debug integration test 'test5'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=basic",
+                    "--test=test5",
                     "--package=copp_rs",
                     "--",
-                    "--no-capture"
+                    "--no-capture",
+                    "--test-threads=1"
                 ],
                 "filter": {
-                    "name": "basic",
+                    "name": "test5",
                     "kind": "test"
                 }
             },
@@ -52,7 +54,10 @@
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=copp_rs"
+                    "--package=copp_rs",
+                    "--",
+                    "--no-capture",
+                    "--test-threads=1"
                 ],
                 "filter": {
                     "name": "copp_rs",
@@ -71,7 +76,10 @@
                     "test",
                     "--no-run",
                     "--bin=copp_rs",
-                    "--package=copp_rs"
+                    "--package=copp_rs",
+                    "--",
+                    "--no-capture",
+                    "--test-threads=1"
                 ],
                 "filter": {
                     "name": "copp_rs",
